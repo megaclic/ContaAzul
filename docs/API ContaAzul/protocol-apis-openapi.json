@@ -1,0 +1,120 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Protocolos",
+    "version": "v1",
+    "description": "A API de Protocolos é responsável por gerenciar o ciclo de vida de eventos enviados ao ERP, permitindo que sua aplicação acompanhe o processamento do evento financeiro. Quando um evento financeiro é enviado para a Conta Azul, ele gera um protocolo, que funciona como um identificador único para acompanhar o status dessa operação.\n\nEssa API é essencial para integrações assíncronas, em que o evento não é processado imediatamente. Em vez disso, o ERP recebe a solicitação, coloca em fila e atualiza o status conforme o processamento avança.\n"
+  },
+  "servers": [
+    {
+      "url": "https://api-v2.contaazul.com",
+      "description": "Servidor de produção"
+    }
+  ],
+  "tags": [
+    {
+      "name": "v1",
+      "description": "Recurso para acompanhar e administrar operações relacionadas a protocolos —  esse recurso inclui retornar o protocolo por id"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "paths": {
+    "/v1/protocolo/{id}": {
+      "get": {
+        "summary": "Retornar o protocolo por id",
+        "operationId": "buscarProtocoloPorId",
+        "description": "Permite consultar os detalhes de um protocolo específico identificado por id.",
+        "tags": [
+          "v1"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "example": "123e4567-e89b-12d3-a456-426614174000",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProtocolResponseDTO"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "429": {
+            "description": "Too Many Requests"
+          },
+          "500": {
+            "description": "Internal Server Error"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Token de autorização Bearer JWT"
+      }
+    },
+    "schemas": {
+      "ProtocolResponseDTO": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identificador do protocolo",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "resposta": {
+            "type": "string",
+            "description": "Mensagem do protocolo",
+            "example": "Operação realizada com sucesso."
+          },
+          "status": {
+            "type": "string",
+            "description": "Status do protocolo: - PENDING: em processamento - SUCCESS: criado - ERROR: erro na criação",
+            "enum": [
+              "PENDING",
+              "SUCCESS",
+              "ERROR"
+            ],
+            "example": "SUCCESS"
+          },
+          "evento_financeiro_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identificador do evento financeiro",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          }
+        }
+      }
+    }
+  }
+}
