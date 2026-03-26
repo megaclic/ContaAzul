@@ -1,7 +1,8 @@
 // ============================================================================
 // ContaAzul Sync Categorias Financeiras - Supabase Edge Function
-// Version: 1.0.0
+// Version: 1.1.0 - CORRIGIDO
 // Purpose: Sync categorias financeiras (plano de contas) from ContaAzul API
+// FIX: Endpoint corrigido de /v1/financeiro/categorias para /v1/categorias
 // ============================================================================
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -114,12 +115,13 @@ async function getValidAccessToken(supabase: any): Promise<string> {
 
 /**
  * Fetch categorias financeiras from ContaAzul API
- * GET /v1/financeiro/categorias
+ * FIXED: GET /v1/categorias (não /v1/financeiro/categorias)
  */
 async function fetchCategorias(
   accessToken: string
 ): Promise<any[]> {
-  const url = 'https://api-v2.contaazul.com/v1/financeiro/categorias';
+  // ✅ ENDPOINT CORRETO: /v1/categorias
+  const url = 'https://api-v2.contaazul.com/v1/categorias';
 
   const response = await fetch(url, {
     headers: {

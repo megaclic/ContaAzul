@@ -1,7 +1,13 @@
 // ============================================================================
 // ContaAzul Sync Financeiro - Supabase Edge Function
-// Version: 1.0.0
+// Version: 2.0.0 - CORREÇÃO CRÍTICA
 // Purpose: Sync contas a pagar e receber from ContaAzul API
+// 
+// BREAKING CHANGES:
+// - Endpoints corrigidos conforme OpenAPI oficial
+// - GET: /v1/financeiro/eventos-financeiros/contas-a-receber/buscar
+// - GET: /v1/financeiro/eventos-financeiros/contas-a-pagar/buscar
+// - Removido paths incorretos: /v1/financeiro/contas-a-receber e contas-a-pagar
 // ============================================================================
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -14,7 +20,7 @@ import { createHash } from 'https://deno.land/std@0.168.0/hash/mod.ts';
 
 interface SyncRequest {
   operation: 'full' | 'incremental';
-  type?: 'receber' | 'pagar' | 'both'; // What to sync
+  type: 'receber' | 'pagar' | 'both';
   force?: boolean;
 }
 
@@ -23,8 +29,7 @@ interface SyncResult {
   job_id?: string;
   operation: string;
   type: string;
-  total_fetched_receber: number;
-  total_fetched_pagar: number;
+  total_fetched: number;
   total_upserted: number;
   total_errors: number;
   duration_ms: number;
@@ -117,98 +122,184 @@ async function getValidAccessToken(supabase: any): Promise<string> {
 
 /**
  * Fetch contas a receber from ContaAzul API
- * GET /v1/financeiro/contas-a-receber
+ * ✅ ENDPOINT CORRETO: GET /v1/financeiro/eventos-financeiros/contas-a-receber/buscar
  */
 async function fetchContasReceber(
   accessToken: string,
+  operation: 'full' | 'incremental',
   lastSyncDate?: string
 ): Promise<any[]> {
-  const baseUrl = 'https://api-v2.contaazul.com/v1/financeiro/contas-a-receber';
-  const params = new URLSearchParams();
+  // ✅ ENDPOINT CORRETO
+  const baseUrl = 'https://api-v2.contaazul.com/v1/financeiro/eventos-financeiros/contas-a-receber/buscar';
+  const allContas: any[] = [];
+  
+  let page = 0;
+  let hasMore = true;
 
-  if (lastSyncDate) {
-    params.append('data_alteracao_de', lastSyncDate);
+  while (hasMore) {
+    const params = new URLSearchParams({
+      pagina: page.toString(),
+      tamanho_pagina: '100',
+    });
+
+    // For incremental sync
+    if (operation === 'incremental' && lastSyncDate) {
+      params.append('data_alteracao_de', lastSyncDate);
+    }
+
+    const url = `${baseUrl}?${params.toString()}`;
+
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to fetch contas a receber: ${error}`);
+    }
+
+    const data = await response.json();
+    
+    if (data?.items && Array.isArray(data.items)) {
+      allContas.push(...data.items);
+      hasMore = data.items.length === 100;
+      page++;
+    } else if (Array.isArray(data)) {
+      allContas.push(...data);
+      hasMore = data.length === 100;
+      page++;
+    } else {
+      hasMore = false;
+    }
   }
 
-  const url = `${baseUrl}?${params.toString()}`;
-
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Accept': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to fetch contas a receber: ${error}`);
-  }
-
-  const data = await response.json();
-  return Array.isArray(data) ? data : (data.items || []);
+  return allContas;
 }
 
 /**
  * Fetch contas a pagar from ContaAzul API
- * GET /v1/financeiro/contas-a-pagar
+ * ✅ ENDPOINT CORRETO: GET /v1/financeiro/eventos-financeiros/contas-a-pagar/buscar
  */
 async function fetchContasPagar(
   accessToken: string,
+  operation: 'full' | 'incremental',
   lastSyncDate?: string
 ): Promise<any[]> {
-  const baseUrl = 'https://api-v2.contaazul.com/v1/financeiro/contas-a-pagar';
-  const params = new URLSearchParams();
+  // ✅ ENDPOINT CORRETO
+  const baseUrl = 'https://api-v2.contaazul.com/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar';
+  const allContas: any[] = [];
+  
+  let page = 0;
+  let hasMore = true;
 
-  if (lastSyncDate) {
-    params.append('data_alteracao_de', lastSyncDate);
+  while (hasMore) {
+    const params = new URLSearchParams({
+      pagina: page.toString(),
+      tamanho_pagina: '100',
+    });
+
+    // For incremental sync
+    if (operation === 'incremental' && lastSyncDate) {
+      params.append('data_alteracao_de', lastSyncDate);
+    }
+
+    const url = `${baseUrl}?${params.toString()}`;
+
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      throw new Error(`Failed to fetch contas a pagar: ${error}`);
+    }
+
+    const data = await response.json();
+    
+    if (data?.items && Array.isArray(data.items)) {
+      allContas.push(...data.items);
+      hasMore = data.items.length === 100;
+      page++;
+    } else if (Array.isArray(data)) {
+      allContas.push(...data);
+      hasMore = data.length === 100;
+      page++;
+    } else {
+      hasMore = false;
+    }
   }
 
-  const url = `${baseUrl}?${params.toString()}`;
-
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Accept': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Failed to fetch contas a pagar: ${error}`);
-  }
-
-  const data = await response.json();
-  return Array.isArray(data) ? data : (data.items || []);
+  return allContas;
 }
 
 /**
- * Upsert conta financeira to database
+ * Upsert conta a receber to database
  */
-async function upsertContaFinanceira(
+async function upsertContaReceber(
   supabase: any,
   conta: any,
-  tipo: 'receber' | 'pagar',
   hash: string
 ): Promise<void> {
-  const tableName = tipo === 'receber' 
-    ? 'contaazul_raw_contas_receber' 
-    : 'contaazul_raw_contas_pagar';
-
-  await supabase.from(tableName).upsert({
+  await supabase.from('contaazul_raw_contas_receber').upsert({
     id: conta.id,
-    numero_documento: conta.numero_documento,
+    numero: conta.numero,
+    id_cliente: conta.cliente?.id,
+    nome_cliente: conta.cliente?.nome,
     valor: conta.valor,
-    data_competencia: conta.data_competencia,
+    valor_pago: conta.valor_pago,
     data_vencimento: conta.data_vencimento,
     data_emissao: conta.data_emissao,
-    descricao: conta.descricao,
-    situacao: conta.situacao,
-    id_pessoa: conta.id_pessoa,
-    nome_pessoa: conta.nome_pessoa,
+    data_pagamento: conta.data_pagamento,
+    status: conta.status,
+    historico: conta.historico,
     id_categoria: conta.categoria?.id,
     nome_categoria: conta.categoria?.nome,
-    forma_pagamento: conta.forma_pagamento,
-    data_alteracao: conta.data_alteracao,
+    id_conta_financeira: conta.conta_financeira?.id,
+    nome_conta_financeira: conta.conta_financeira?.nome,
+    id_centro_custo: conta.centro_custo?.id,
+    nome_centro_custo: conta.centro_custo?.nome,
+    observacoes: conta.observacoes,
+    raw_payload: conta,
+    payload_hash: hash,
+    last_synced_at: new Date().toISOString(),
+  }, {
+    onConflict: 'id',
+  });
+}
+
+/**
+ * Upsert conta a pagar to database
+ */
+async function upsertContaPagar(
+  supabase: any,
+  conta: any,
+  hash: string
+): Promise<void> {
+  await supabase.from('contaazul_raw_contas_pagar').upsert({
+    id: conta.id,
+    numero: conta.numero,
+    id_fornecedor: conta.fornecedor?.id,
+    nome_fornecedor: conta.fornecedor?.nome,
+    valor: conta.valor,
+    valor_pago: conta.valor_pago,
+    data_vencimento: conta.data_vencimento,
+    data_emissao: conta.data_emissao,
+    data_pagamento: conta.data_pagamento,
+    status: conta.status,
+    historico: conta.historico,
+    id_categoria: conta.categoria?.id,
+    nome_categoria: conta.categoria?.nome,
+    id_conta_financeira: conta.conta_financeira?.id,
+    nome_conta_financeira: conta.conta_financeira?.nome,
+    id_centro_custo: conta.centro_custo?.id,
+    nome_centro_custo: conta.centro_custo?.nome,
+    observacoes: conta.observacoes,
     raw_payload: conta,
     payload_hash: hash,
     last_synced_at: new Date().toISOString(),
@@ -247,7 +338,7 @@ serve(async (req: Request) => {
     const { data: job, error: jobError } = await supabase
       .from('contaazul_sync_jobs')
       .insert({
-        entity_type: 'financeiro',
+        entity_type: `financeiro_${type}`,
         operation_type: operation,
         status: 'running',
         started_at: new Date().toISOString(),
@@ -268,7 +359,7 @@ serve(async (req: Request) => {
         const { data: lastJob } = await supabase
           .from('contaazul_sync_jobs')
           .select('completed_at')
-          .eq('entity_type', 'financeiro')
+          .eq('entity_type', `financeiro_${type}`)
           .eq('status', 'success')
           .order('completed_at', { ascending: false })
           .limit(1)
@@ -285,53 +376,51 @@ serve(async (req: Request) => {
 
       const accessToken = await getValidAccessToken(supabase);
 
-      let contasReceber: any[] = [];
-      let contasPagar: any[] = [];
-
-      // Fetch contas a receber
-      if (type === 'receber' || type === 'both') {
-        console.log('Fetching contas a receber from ContaAzul API...');
-        contasReceber = await fetchContasReceber(accessToken, lastSyncDate);
-        console.log(`Fetched ${contasReceber.length} contas a receber`);
-      }
-
-      // Fetch contas a pagar
-      if (type === 'pagar' || type === 'both') {
-        console.log('Fetching contas a pagar from ContaAzul API...');
-        contasPagar = await fetchContasPagar(accessToken, lastSyncDate);
-        console.log(`Fetched ${contasPagar.length} contas a pagar`);
-      }
-
-      console.log('Upserting contas to database...');
-      let upserted = 0;
+      let totalFetched = 0;
+      let totalUpserted = 0;
       const errors: string[] = [];
 
-      // Upsert contas a receber
-      for (const conta of contasReceber) {
-        try {
-          const hash = computeHash(conta);
-          await upsertContaFinanceira(supabase, conta, 'receber', hash);
-          upserted++;
-        } catch (error) {
-          console.error(`Error upserting conta receber ${conta.id}:`, error);
-          errors.push(`receber-${conta.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Sync Contas a Receber
+      if (type === 'receber' || type === 'both') {
+        console.log('Fetching contas a receber from ContaAzul API...');
+        const contasReceber = await fetchContasReceber(accessToken, operation, lastSyncDate);
+        console.log(`Fetched ${contasReceber.length} contas a receber`);
+        totalFetched += contasReceber.length;
+
+        console.log('Upserting contas a receber to database...');
+        for (const conta of contasReceber) {
+          try {
+            const hash = computeHash(conta);
+            await upsertContaReceber(supabase, conta, hash);
+            totalUpserted++;
+          } catch (error) {
+            console.error(`Error upserting conta a receber ${conta.id}:`, error);
+            errors.push(`receber_${conta.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
         }
       }
 
-      // Upsert contas a pagar
-      for (const conta of contasPagar) {
-        try {
-          const hash = computeHash(conta);
-          await upsertContaFinanceira(supabase, conta, 'pagar', hash);
-          upserted++;
-        } catch (error) {
-          console.error(`Error upserting conta pagar ${conta.id}:`, error);
-          errors.push(`pagar-${conta.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Sync Contas a Pagar
+      if (type === 'pagar' || type === 'both') {
+        console.log('Fetching contas a pagar from ContaAzul API...');
+        const contasPagar = await fetchContasPagar(accessToken, operation, lastSyncDate);
+        console.log(`Fetched ${contasPagar.length} contas a pagar`);
+        totalFetched += contasPagar.length;
+
+        console.log('Upserting contas a pagar to database...');
+        for (const conta of contasPagar) {
+          try {
+            const hash = computeHash(conta);
+            await upsertContaPagar(supabase, conta, hash);
+            totalUpserted++;
+          } catch (error) {
+            console.error(`Error upserting conta a pagar ${conta.id}:`, error);
+            errors.push(`pagar_${conta.id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
         }
       }
 
       const duration = Date.now() - startTime;
-      const totalFetched = contasReceber.length + contasPagar.length;
 
       await supabase
         .from('contaazul_sync_jobs')
@@ -339,7 +428,7 @@ serve(async (req: Request) => {
           status: errors.length > 0 ? 'partial_success' : 'success',
           completed_at: new Date().toISOString(),
           records_processed: totalFetched,
-          records_success: upserted,
+          records_success: totalUpserted,
           records_error: errors.length,
           error_details: errors.length > 0 ? errors : null,
           duration_ms: duration,
@@ -353,9 +442,8 @@ serve(async (req: Request) => {
         job_id: jobId,
         operation,
         type,
-        total_fetched_receber: contasReceber.length,
-        total_fetched_pagar: contasPagar.length,
-        total_upserted: upserted,
+        total_fetched: totalFetched,
+        total_upserted: totalUpserted,
         total_errors: errors.length,
         duration_ms: duration,
         errors: errors.length > 0 ? errors : undefined,
