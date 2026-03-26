@@ -1,506 +1,422 @@
-# 🚀 ContaAzul Integration
+# 🔧 ContaAzul Integration - Arquivos de Correção v2.0
 
-Integração completa e type-safe com a API ContaAzul v2 para projetos **React + Vite + TypeScript + TanStack Query + Supabase**.
-
-[![TypeScript](https://img.shields.io/badge/TypeScript-100%25-blue)](https://www.typescriptlang.org/)
-[![React](https://img.shields.io/badge/React-18-61DAFB)](https://react.dev/)
-[![TanStack Query](https://img.shields.io/badge/TanStack%20Query-5-FF4154)](https://tanstack.com/query)
-[![Supabase](https://img.shields.io/badge/Supabase-Ready-3ECF8E)](https://supabase.com/)
+> **Baseado em:** Análise de Gaps + PLANO_EXECUCAO_ATUALIZADO_v2.md  
+> **Data:** 2026-03-26  
+> **Objetivo:** Corrigir gaps críticos identificados na análise técnica
 
 ---
 
-## ✨ Diferenciais
+## 📦 O Que Este Pacote Contém
 
-- ✅ **100% TypeScript Strict** — Zero `any`, types gerados da OpenAPI oficial
-- ✅ **OAuth 2.0 Completo** — Authorization Code flow + auto-refresh de tokens
-- ✅ **12 APIs Cobertas** — Financeiro, Produtos, Pessoas, Vendas, Contratos, Serviços, etc
-- ✅ **React Hooks** — TanStack Query com cache inteligente e invalidação automática
-- ✅ **Rate Limiting** — 600 req/min, 10 req/seg com exponential backoff automático
-- ✅ **Supabase Ready** — Tokens criptografados + RLS + migrations prontas
-- ✅ **Error Handling** — Tipos específicos de erro por endpoint
+Este pacote contém **7 arquivos** para corrigir os gaps críticos identificados na análise:
+
+### ✅ **Robustez OAuth (Bloco B)**
+1. `supabase/functions/contaazul-token-refresh/index.ts` - Refresh com lock PostgreSQL
+2. `supabase/functions/contaazul-auto-refresh/index.ts` - Auto-refresh background
+3. `supabase/migrations/002_improve_connection_status.sql` - Status + helpers
+
+### ✅ **Sync Engine Core (Bloco C)**
+4. `supabase/functions/sync-produtos/index.ts` - Primeiro worker real
+5. `src/hooks/useSyncJobs.ts` - React Hook para gerenciar jobs
+
+### ✅ **Observabilidade (Bloco D)**
+6. `src/components/contaazul/HealthDashboard.tsx` - Dashboard de saúde
+7. `src/components/contaazul/SyncHistory.tsx` - Visualizador de histórico
 
 ---
 
-## 📦 Instalação
+## 🚀 IMPLEMENTAÇÃO PASSO A PASSO
+
+### **FASE 1: Backend (Supabase) - 30 minutos**
+
+#### 1.1. Aplicar Migration SQL
 
 ```bash
-npm install axios @tanstack/react-query
+# No Supabase SQL Editor, executar:
+supabase/migrations/002_improve_connection_status.sql
 ```
 
-**Ou copie os arquivos** desta integração para o seu projeto Lovable/Vite.
+**O que faz:**
+- ✅ Expande status de conexão (7 estados)
+- ✅ Adiciona helpers de lock (`pg_try_advisory_lock`, `pg_advisory_unlock`)
+- ✅ Funções auxiliares (get active connection, check expiring tokens)
+- ✅ View `contaazul_connection_health`
+- ✅ Trigger auto-expire de tokens
+
+**Verificar:**
+```sql
+SELECT * FROM contaazul_connection_health;
+SELECT * FROM get_expiring_connections(5); -- tokens expirando em < 5min
+```
 
 ---
 
-## ⚙️ Configuração
-
-### 1. Variáveis de Ambiente
-
-Crie `.env` na raiz do projeto:
-
-```env
-# OAuth 2.0 Credentials
-VITE_CONTAAZUL_CLIENT_ID=your_client_id
-VITE_CONTAAZUL_CLIENT_SECRET=your_client_secret
-VITE_CONTAAZUL_REDIRECT_URI=http://localhost:5173/contaazul/callback
-
-# API URLs (opcional - usa valores padrão)
-VITE_CONTAAZUL_API_BASE_URL=https://api-v2.contaazul.com
-VITE_CONTAAZUL_AUTH_URL=https://api.contaazul.com/auth/authorize
-VITE_CONTAAZUL_TOKEN_URL=https://api.contaazul.com/oauth2/token
-```
-
-### 2. Supabase Migration
-
-Execute a migration para criar a tabela de tokens:
+#### 1.2. Deploy Edge Functions
 
 ```bash
-supabase migration up
+# 1. Token Refresh
+supabase functions deploy contaazul-token-refresh
+
+# 2. Auto-Refresh Background
+supabase functions deploy contaazul-auto-refresh
+
+# 3. Sync Produtos
+supabase functions deploy sync-produtos
 ```
 
-Ou copie o conteúdo de `supabase/migrations/001_contaazul_integration.sql` e execute no SQL Editor do Supabase.
+**Verificar:**
+```bash
+# Testar token refresh
+curl -X POST https://[PROJECT_ID].supabase.co/functions/v1/contaazul-token-refresh \
+  -H "Authorization: Bearer [ANON_KEY]" \
+  -H "Content-Type: application/json" \
+  -d '{}'
 
-### 3. React Query Provider
+# Testar auto-refresh
+curl -X POST https://[PROJECT_ID].supabase.co/functions/v1/contaazul-auto-refresh \
+  -H "Authorization: Bearer [SERVICE_ROLE_KEY]"
 
-Envolva sua aplicação com o `QueryClientProvider`:
+# Testar sync produtos
+curl -X POST https://[PROJECT_ID].supabase.co/functions/v1/sync-produtos \
+  -H "Authorization: Bearer [ANON_KEY]" \
+  -H "Content-Type: application/json" \
+  -d '{"operation": "full"}'
+```
+
+---
+
+#### 1.3. Configurar pg_cron (Auto-Refresh)
+
+```sql
+-- Habilitar extensão (se ainda não estiver)
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+
+-- Agendar auto-refresh (cada 2 minutos)
+SELECT cron.schedule(
+  'contaazul-auto-refresh',
+  '*/2 * * * *',
+  $$SELECT net.http_post(
+    url := 'https://[SEU_PROJECT_ID].supabase.co/functions/v1/contaazul-auto-refresh',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer [SEU_SERVICE_ROLE_KEY]'
+    )
+  )$$
+);
+
+-- Agendar sync incremental produtos (cada hora)
+SELECT cron.schedule(
+  'sync-produtos-incremental',
+  '0 * * * *',
+  $$SELECT net.http_post(
+    url := 'https://[SEU_PROJECT_ID].supabase.co/functions/v1/sync-produtos',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer [SEU_ANON_KEY]'
+    ),
+    body := '{"operation": "incremental"}'::jsonb
+  )$$
+);
+
+-- Agendar sync full produtos (1x/dia às 00:00)
+SELECT cron.schedule(
+  'sync-produtos-full',
+  '0 0 * * *',
+  $$SELECT net.http_post(
+    url := 'https://[SEU_PROJECT_ID].supabase.co/functions/v1/sync-produtos',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer [SEU_ANON_KEY]'
+    ),
+    body := '{"operation": "full"}'::jsonb
+  )$$
+);
+
+-- Verificar jobs agendados
+SELECT * FROM cron.job;
+```
+
+---
+
+### **FASE 2: Frontend (Lovable/Vite) - 20 minutos**
+
+#### 2.1. Copiar Arquivos React
+
+```
+src/
+├── hooks/
+│   └── useSyncJobs.ts         ← COPIAR
+└── components/contaazul/
+    ├── HealthDashboard.tsx    ← COPIAR
+    └── SyncHistory.tsx        ← COPIAR
+```
+
+---
+
+#### 2.2. Adicionar ao Admin
 
 ```tsx
-// src/main.tsx
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+// src/pages/Admin/ContaAzul.tsx
+import { HealthDashboard } from '@/components/contaazul/HealthDashboard';
+import { SyncHistory } from '@/components/contaazul/SyncHistory';
+import { ConnectionStatus } from '@/components/contaazul/ConnectionStatus';
 
-const queryClient = new QueryClient();
-
-function App() {
+export default function ContaAzulAdmin() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <YourApp />
-    </QueryClientProvider>
+    <div className="space-y-6 p-6">
+      <h1 className="text-3xl font-bold">Integração ContaAzul</h1>
+      
+      {/* Status da Conexão */}
+      <ConnectionStatus />
+      
+      {/* Dashboard de Saúde */}
+      <HealthDashboard />
+      
+      {/* Histórico de Sincronizações */}
+      <SyncHistory />
+    </div>
   );
 }
 ```
 
 ---
 
-## 🎯 Uso Rápido
+### **FASE 3: Testes - 15 minutos**
 
-### Autenticação OAuth 2.0
+#### 3.1. Testar Token Refresh
 
-```tsx
-import { useContaAzulAuth } from './hooks/contaazul/useContaAzulAuth';
+```sql
+-- Forçar token para expirar em 2 minutos
+UPDATE contaazul_connections
+SET token_expires_at = now() + interval '2 minutes'
+WHERE is_active = true;
 
-function LoginButton() {
-  const { isAuthenticated, login, logout, isLoading, error } = useContaAzulAuth();
-
-  if (isAuthenticated) {
-    return <button onClick={logout}>Desconectar ContaAzul</button>;
-  }
-
-  return (
-    <button onClick={login} disabled={isLoading}>
-      {isLoading ? 'Conectando...' : 'Conectar ContaAzul'}
-    </button>
-  );
-}
-```
-
-### Callback OAuth (rota `/contaazul/callback`)
-
-```tsx
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useContaAzulAuth } from './hooks/contaazul/useContaAzulAuth';
-
-function ContaAzulCallback() {
-  const { processCallback } = useContaAzulAuth();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    processCallback()
-      .then(() => navigate('/dashboard'))
-      .catch((error) => {
-        console.error('OAuth error:', error);
-        navigate('/login?error=oauth_failed');
-      });
-  }, []);
-
-  return <div>Conectando com ContaAzul...</div>;
-}
-```
-
-### Listar Produtos
-
-```tsx
-import { useProdutos } from './hooks/contaazul/useProdutos';
-
-function ProductList() {
-  const { data, isLoading, error } = useProdutos({
-    status: 'ATIVO',
-    tamanho_pagina: 20,
-  });
-
-  if (isLoading) return <div>Carregando...</div>;
-  if (error) return <div>Erro: {error.message}</div>;
-
-  return (
-    <ul>
-      {data?.items.map((produto) => (
-        <li key={produto.id}>
-          {produto.nome} - R$ {produto.valor_venda}
-        </li>
-      ))}
-    </ul>
-  );
-}
-```
-
-### Criar Conta a Receber
-
-```tsx
-import { useCreateContaReceber } from './hooks/contaazul/useFinanceiro';
-
-function CreateReceivable() {
-  const mutation = useCreateContaReceber();
-
-  const handleCreate = () => {
-    mutation.mutate({
-      valor: 1000,
-      data_competencia: '2025-01-15',
-      descricao: 'Venda de produto X',
-      id_cliente: 'uuid-do-cliente',
-      conta_financeira: 'uuid-conta-financeira',
-      rateio: [
-        {
-          id_categoria: 'uuid-categoria',
-          valor: 1000,
-        },
-      ],
-      condicao_pagamento: {
-        parcelas: [
-          {
-            conta_financeira: 'uuid-conta',
-            data_vencimento: '2025-02-15',
-            descricao: 'Parcela única',
-            detalhe_valor: {
-              valor_bruto: 1000,
-            },
-          },
-        ],
-      },
-    });
-  };
-
-  return (
-    <button onClick={handleCreate} disabled={mutation.isPending}>
-      {mutation.isPending ? 'Criando...' : 'Criar Conta a Receber'}
-    </button>
-  );
-}
-```
-
-### Criar Venda
-
-```tsx
-import { useCreateVenda, useVendedores } from './hooks/contaazul/useVendas';
-
-function CreateSale() {
-  const { data: vendedores } = useVendedores();
-  const mutation = useCreateVenda();
-
-  const handleCreate = () => {
-    mutation.mutate({
-      numero: 1001,
-      id_cliente: 'uuid-cliente',
-      situacao: 'APROVADO',
-      data_venda: '2025-01-15',
-      id_vendedor: vendedores?.[0]?.id,
-      itens: [
-        {
-          id: 'uuid-produto',
-          quantidade: 2,
-          valor: 50.0,
-        },
-      ],
-      condicao_pagamento: {
-        opcao_condicao_pagamento: 'À vista',
-        parcelas: [
-          {
-            data_vencimento: '2025-01-15',
-            valor: 100.0,
-          },
-        ],
-      },
-    });
-  };
-
-  return (
-    <button onClick={handleCreate} disabled={mutation.isPending}>
-      {mutation.isPending ? 'Criando...' : 'Criar Venda'}
-    </button>
-  );
-}
-```
-
-### Criar Contrato Recorrente
-
-```tsx
-import { useCreateContrato, useProximoNumeroContrato } from './hooks/contaazul/useContratos';
-
-function CreateContract() {
-  const { data: proximoNumero } = useProximoNumeroContrato();
-  const mutation = useCreateContrato();
-
-  const handleCreate = () => {
-    if (!proximoNumero) return;
-
-    mutation.mutate({
-      numero: proximoNumero,
-      id_cliente: 'uuid-cliente',
-      data_inicio: '2025-01-01',
-      periodo: 'MENSAL',
-      dia_vencimento: 10,
-      itens: [
-        {
-          id: 'uuid-produto-ou-servico',
-          quantidade: 1,
-          valor: 199.90,
-        },
-      ],
-      condicao_pagamento: {
-        tipo_pagamento: 'BOLETO_BANCARIO',
-        opcao_condicao_pagamento: 'À vista',
-        dia_vencimento: 10,
-      },
-    });
-  };
-
-  return (
-    <button onClick={handleCreate} disabled={mutation.isPending || !proximoNumero}>
-      {mutation.isPending ? 'Criando...' : 'Criar Contrato Recorrente'}
-    </button>
-  );
-}
-```
-
-### Listar Clientes
-
-```tsx
-import { usePessoas } from './hooks/contaazul/usePessoas';
-
-function CustomerList() {
-  const { data, isLoading } = usePessoas({
-    tipo_perfil: 'Cliente',
-    tamanho_pagina: 50,
-  });
-
-  if (isLoading) return <div>Carregando clientes...</div>;
-
-  return (
-    <ul>
-      {data?.items.map((pessoa) => (
-        <li key={pessoa.id}>
-          {pessoa.nome} - {pessoa.documento}
-        </li>
-      ))}
-    </ul>
-  );
-}
+-- Aguardar 3 minutos e verificar
+-- O auto-refresh deve ter renovado automaticamente
+SELECT status, token_expires_at FROM contaazul_connections WHERE is_active = true;
 ```
 
 ---
 
-## 📚 Estrutura do Projeto
+#### 3.2. Testar Sync Manual
 
+```bash
+# No frontend, chamar:
+const { mutate } = useTriggerSync();
+
+mutate({
+  entity_type: 'produtos',
+  operation: 'full',
+});
 ```
-contaazul-integration/
-├── src/
-│   ├── types/ (9 arquivos - ~2.500 linhas)
-│   │   ├── core.ts              # Types base (OAuth, paginação, erros)
-│   │   ├── financeiro.ts        # ~800 linhas de types financeiros
-│   │   ├── produtos.ts          # ~600 linhas de types de produtos
-│   │   ├── pessoas.ts           # ~400 linhas de types de pessoas
-│   │   ├── vendas.ts            # ~300 linhas de types de vendas
-│   │   ├── servicos.ts          # ~150 linhas de types de serviços
-│   │   ├── contratos.ts         # ~180 linhas de types de contratos
-│   │   ├── notas-fiscais.ts     # ~120 linhas de types de notas fiscais
-│   │   └── protocolos.ts        # ~50 linhas de types de protocolos
-│   ├── lib/contaazul/
-│   │   ├── client.ts            # Axios + interceptors + rate limiting
-│   │   ├── auth.ts              # OAuth 2.0 flow
-│   │   └── api/ (9 arquivos)
-│   │       ├── financeiro.ts    # API Financeiro
-│   │       ├── produtos.ts      # API Produtos
-│   │       ├── pessoas.ts       # API Pessoas
-│   │       ├── vendas.ts        # API Vendas
-│   │       ├── servicos.ts      # API Serviços
-│   │       ├── contratos.ts     # API Contratos
-│   │       ├── notas-fiscais.ts # API Notas Fiscais
-│   │       ├── protocolos.ts    # API Protocolos
-│   │       └── index.ts         # Exports centralizados
-│   └── hooks/contaazul/ (9 arquivos)
-│       ├── useContaAzulAuth.ts  # Hook OAuth
-│       ├── useFinanceiro.ts     # Hooks TanStack Query Financeiro
-│       ├── useProdutos.ts       # Hooks TanStack Query Produtos
-│       ├── usePessoas.ts        # Hooks TanStack Query Pessoas
-│       ├── useVendas.ts         # Hooks TanStack Query Vendas
-│       ├── useServicos.ts       # Hooks TanStack Query Serviços
-│       ├── useContratos.ts      # Hooks TanStack Query Contratos
-│       ├── useNotasFiscais.ts   # Hooks TanStack Query Notas Fiscais
-│       └── useProtocolos.ts     # Hooks TanStack Query Protocolos
-├── supabase/migrations/
-│   └── 001_contaazul_integration.sql  # Tabela tokens + RLS
-├── examples/
-│   └── ContaAzulDashboard.tsx   # Componente exemplo completo
-├── docs/
-│   └── LOVABLE_MIGRATION.md     # Guia passo a passo para Lovable
-├── package.json
-├── tsconfig.json
-├── .env.example
-├── CHANGELOG.md
-└── README.md
+
+**Verificar:**
+```sql
+-- Verificar job criado
+SELECT * FROM contaazul_sync_jobs ORDER BY created_at DESC LIMIT 1;
+
+-- Verificar produtos sincronizados
+SELECT COUNT(*) FROM contaazul_raw_produtos;
 ```
 
 ---
 
-## 🔑 APIs Disponíveis
+#### 3.3. Testar Health Dashboard
 
-### ✅ TODAS IMPLEMENTADAS (12/12 APIs - 100%)
-
-| Módulo | Endpoints | Hooks |
-|--------|-----------|-------|
-| **Financeiro** | Categorias, Centros Custo, Contas Pagar/Receber, Baixas, Cobranças, Contas Financeiras | `useFinanceiro` |
-| **Produtos** | CRUD, Categorias, NCM, CEST, Unidades, Variações, Kits, E-commerce | `useProdutos` |
-| **Pessoas** | CRUD, Batch ops, Empresa conectada | `usePessoas` |
-| **Vendas** | CRUD, Busca avançada, Vendedores, PDF, Itens, Deletar lote | `useVendas` |
-| **Serviços** | CRUD, Parâmetros fiscais, Deletar lote | `useServicos` |
-| **Contratos** | CRUD, Próximo número, Vendas recorrentes | `useContratos` |
-| **Notas Fiscais** | NFe, NFS-e (read-only), Vínculo MDF-e | `useNotasFiscais` |
-| **Protocolos** | Tracking eventos assíncronos, Polling automático | `useProtocolos` |
-| **Baixas** | Já integrado no módulo Financeiro | - |
-| **Cobranças** | Já integrado no módulo Financeiro | - |
+1. Abrir `/admin/contaazul`
+2. Verificar:
+   - ✅ Conexão: Ativa
+   - ✅ Taxa de Sucesso: > 90%
+   - ✅ Registros Processados: > 0
+   - ✅ Última Sincronização exibida
 
 ---
 
-## 🛡️ Rate Limiting
+## 📋 CHECKLIST DE VALIDAÇÃO
 
-A API ContaAzul possui os seguintes limites **por conta conectada**:
+### ✅ **Backend**
+- [ ] Migration `002_improve_connection_status.sql` executada
+- [ ] Helper functions criadas (7 funções)
+- [ ] View `contaazul_connection_health` existe
+- [ ] Edge Function `contaazul-token-refresh` deployada
+- [ ] Edge Function `contaazul-auto-refresh` deployada
+- [ ] Edge Function `sync-produtos` deployada
+- [ ] pg_cron jobs agendados (3 jobs)
 
-- **600 requisições por minuto**
-- **10 requisições por segundo**
+### ✅ **Frontend**
+- [ ] Hook `useSyncJobs` copiado
+- [ ] Componente `HealthDashboard` copiado
+- [ ] Componente `SyncHistory` copiado
+- [ ] Admin page atualizada
 
-A integração implementa **automatic retry com exponential backoff** (1s → 2s → 4s) quando recebe `429 Too Many Requests`.
+### ✅ **Funcional**
+- [ ] Token refresh manual funciona
+- [ ] Auto-refresh automático funciona (aguardar 2 min)
+- [ ] Sync produtos manual funciona
+- [ ] Sync produtos agendado funciona (aguardar 1h)
+- [ ] Dashboard exibe métricas corretas
+- [ ] Histórico exibe jobs
 
 ---
 
-## 🔐 Segurança
+## 🔍 TROUBLESHOOTING
 
-- ✅ Tokens armazenados em Supabase com **encryption at rest**
-- ✅ **Row Level Security (RLS)** habilitado
-- ✅ Tokens auto-refresh com margem de 5 minutos
-- ✅ CSRF protection no OAuth flow (state parameter)
-- ✅ Tokens expirados limpos automaticamente após 30 dias
+### **Erro: "pg_try_advisory_lock function does not exist"**
 
----
+**Causa:** Helper functions não foram criadas
 
-## 📖 Documentação
-
-### Hooks Disponíveis
-
-#### `useContaAzulAuth()`
-Gerencia autenticação OAuth 2.0.
-
-**Returns:**
-```ts
-{
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  error: string | null;
-  tokenInfo: { hasToken, expiresAt, isExpired };
-  login: () => void;
-  logout: () => void;
-  processCallback: () => Promise<void>;
-}
+**Solução:**
+```sql
+-- Executar a migration 002 novamente
+\i supabase/migrations/002_improve_connection_status.sql
 ```
 
-#### `useFinanceiro()`
-- `useCategorias(params?)` — Lista categorias financeiras
-- `useCentrosCusto(params?)` — Lista centros de custo
-- `useContasReceber(params)` — Lista contas a receber
-- `useContasPagar(params)` — Lista contas a pagar
-- `useCreateContaReceber()` — Cria receita (mutation)
-- `useCreateContaPagar()` — Cria despesa (mutation)
+---
 
-#### `useProdutos()`
-- `useProdutos(params?)` — Lista produtos
-- `useProduto(id)` — Busca produto por ID
-- `useCreateProduto()` — Cria produto (mutation)
-- `useUpdateProduto()` — Atualiza produto (mutation)
-- `useDeleteProduto()` — Deleta produto (mutation)
+### **Erro: "Token refresh failed: 401"**
 
-#### `usePessoas()`
-- `usePessoas(params?)` — Lista pessoas
-- `usePessoa(id)` — Busca pessoa por ID
-- `useCreatePessoa()` — Cria pessoa (mutation)
-- `useUpdatePessoa()` — Atualiza pessoa (mutation)
-- `useAtivarPessoas()` — Ativa pessoas em lote (mutation)
-- `useInativarPessoas()` — Inativa pessoas em lote (mutation)
+**Causa:** Token já expirou completamente
 
-#### `useVendas()`
-- `useVendas(params?)` — Lista vendas com filtros avançados
-- `useVenda(id)` — Busca venda por ID
-- `useCreateVenda()` — Cria venda (mutation)
-- `useUpdateVenda()` — Atualiza venda (mutation)
-- `useDeleteVendas()` — Deleta vendas em lote (mutation)
-- `useVendedores()` — Lista vendedores
-- `useItensVenda(idVenda)` — Lista itens de uma venda
-- `usePdfVenda(idVenda)` — Retorna URL do PDF da venda
+**Solução:**
+```sql
+-- Forçar reconexão OAuth
+UPDATE contaazul_connections
+SET status = 'expired', is_active = false
+WHERE is_active = true;
 
-#### `useServicos()`
-- `useServicos(params?)` — Lista serviços
-- `useServico(id)` — Busca serviço por ID
-- `useCreateServico()` — Cria serviço (mutation)
-- `useUpdateServico()` — Atualiza serviço (mutation)
-- `useDeleteServicos()` — Deleta serviços em lote (mutation)
-
-#### `useContratos()`
-- `useContratos(params?)` — Lista contratos recorrentes
-- `useCreateContrato()` — Cria contrato (mutation)
-- `useProximoNumeroContrato()` — Retorna próximo número disponível
-
-#### `useNotasFiscais()`
-- `useNFe(params?)` — Lista NFe (Notas Fiscais Eletrônicas)
-- `useNFeByChave(chave)` — Busca NFe por chave de acesso
-- `useNFSe(params?)` — Lista NFS-e (Notas Fiscais de Serviço)
-- `useVincularNotasMDFe()` — Vincula notas a MDF-e (mutation)
-
-#### `useProtocolos()`
-- `useProtocolo(id)` — Busca protocolo por ID (tracking assíncrono)
-- `useProtocoloComPolling(id)` — Busca com polling automático até finalizar
+-- Usuário deve fazer login novamente
+```
 
 ---
 
-## 🤝 Contribuindo
+### **Erro: "Sync job stuck in 'running' status"**
 
-Contribuições são bem-vindas! Para adicionar novas APIs:
+**Causa:** Edge Function crashou sem atualizar status
 
-1. Crie os types em `src/types/[modulo].ts`
-2. Implemente a API em `src/lib/contaazul/api/[modulo].ts`
-3. Crie hooks em `src/hooks/contaazul/use[Modulo].ts`
-4. Adicione exports em `src/lib/contaazul/api/index.ts`
-
----
-
-## 📝 Licença
-
-MIT
+**Solução:**
+```sql
+-- Marcar job como erro manualmente
+UPDATE contaazul_sync_jobs
+SET status = 'error', completed_at = now()
+WHERE id = '[JOB_ID]' AND status = 'running';
+```
 
 ---
 
-## 🔗 Links Úteis
+### **pg_cron não está executando**
 
-- [Documentação Oficial ContaAzul](https://developers.contaazul.com)
-- [OpenAPI Specification](https://developers.contaazul.com/open-api-docs)
-- [TanStack Query Docs](https://tanstack.com/query/latest)
-- [Supabase Auth Docs](https://supabase.com/docs/guides/auth)
+**Causa:** Extensão não habilitada ou job mal configurado
+
+**Solução:**
+```sql
+-- 1. Verificar extensão
+SELECT * FROM pg_extension WHERE extname = 'pg_cron';
+
+-- 2. Verificar jobs
+SELECT * FROM cron.job;
+
+-- 3. Verificar logs
+SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 10;
+```
 
 ---
 
-**Desenvolvido com ❤️ para a comunidade React + ContaAzul**
+## 🎯 MÉTRICAS DE SUCESSO
+
+Após implementação, você deve ver:
+
+### **Imediato (< 5 min)**
+- ✅ Migration aplicada
+- ✅ Edge Functions deployadas
+- ✅ Dashboard exibindo status
+
+### **Curto Prazo (< 1h)**
+- ✅ Auto-refresh executou pelo menos 1x
+- ✅ Sync produtos executou (manual ou agendado)
+- ✅ Jobs aparecem no histórico
+
+### **Médio Prazo (< 1 dia)**
+- ✅ Token renovado automaticamente
+- ✅ Sync incremental funcionando
+- ✅ Taxa de sucesso > 95%
+- ✅ Zero tokens expirados não renovados
+
+---
+
+## 📚 ARQUITETURA
+
+### **Fluxo de Token Refresh**
+
+```
+1. pg_cron (cada 2 min)
+   ↓
+2. contaazul-auto-refresh Edge Function
+   ↓
+3. get_expiring_connections(5) → tokens expirando < 5min
+   ↓
+4. Para cada conexão:
+   ├─ contaazul-token-refresh Edge Function
+   ├─ pg_try_advisory_lock(connection_id)
+   ├─ Exchange refresh_token → new access_token
+   ├─ Encrypt + Save
+   └─ pg_advisory_unlock(connection_id)
+```
+
+### **Fluxo de Sync**
+
+```
+1. Trigger manual OU pg_cron (cada 1h)
+   ↓
+2. sync-produtos Edge Function
+   ↓
+3. Create job (status: running)
+   ↓
+4. Get valid token (refresh se necessário)
+   ↓
+5. Fetch ContaAzul API (paginado)
+   ↓
+6. Para cada produto:
+   ├─ Compute hash (SHA-256)
+   ├─ Upsert to contaazul_raw_produtos
+   └─ Track success/error
+   ↓
+7. Update job (status: success/error)
+```
+
+---
+
+## 🔐 SEGURANÇA
+
+### **Tokens Nunca Expostos**
+- ✅ Encrypted at rest (AES-GCM)
+- ✅ Decrypted apenas em Edge Functions
+- ✅ NUNCA enviados ao frontend
+
+### **Lock Concorrente**
+- ✅ PostgreSQL advisory locks
+- ✅ Evita refresh simultâneo
+- ✅ Lock sempre released (finally block)
+
+### **Audit Trail**
+- ✅ Todos os eventos logados
+- ✅ Timestamps precisos
+- ✅ Metadata estruturada
+
+---
+
+## 📞 PRÓXIMOS PASSOS
+
+Após implementar este pacote:
+
+1. ✅ **Semana 3 (Atual):** Stabilization — COMPLETO
+2. 📋 **Semana 4-5:** Implementar mais workers (vendas, pessoas, financeiro)
+3. 📋 **Semana 6:** Testes automatizados
+4. 📋 **Semana 7:** Hardening + Runbook
+
+---
+
+**Versão:** 2.0  
+**Data:** 2026-03-26  
+**Status:** Ready to Deploy  
+
+---
