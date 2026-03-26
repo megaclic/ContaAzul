@@ -48,7 +48,7 @@ export const categorias = {
    */
   list: async (params?: CategoriasFinanceirasQueryParams): Promise<CategoriasFinanceirasResponse> => {
     const { data } = await contaAzulClient.get<CategoriasFinanceirasResponse>(
-      '/v1/financeiro/categorias',
+      '/v1/categorias',
       { params }
     );
     return data;
@@ -59,7 +59,7 @@ export const categorias = {
    */
   getById: async (id: string): Promise<CategoriaFinanceira> => {
     const { data } = await contaAzulClient.get<CategoriaFinanceira>(
-      `/v1/financeiro/categorias/${id}`
+      `/v1/categorias/${id}`
     );
     return data;
   },
@@ -75,7 +75,7 @@ export const centrosCusto = {
    */
   list: async (params?: CentrosCustoQueryParams): Promise<ListagemCentroCusto> => {
     const { data } = await contaAzulClient.get<ListagemCentroCusto>(
-      '/v1/financeiro/centros-de-custo',
+      '/v1/centro-de-custo',
       { params }
     );
     return data;
@@ -86,7 +86,7 @@ export const centrosCusto = {
    */
   create: async (payload: CriacaoCentroCusto): Promise<CentroCusto> => {
     const { data } = await contaAzulClient.post<CentroCusto>(
-      '/v1/financeiro/centros-de-custo',
+      '/v1/centro-de-custo',
       payload
     );
     return data;
@@ -96,7 +96,7 @@ export const centrosCusto = {
    * Atualiza centro de custo por ID
    */
   update: async (id: string, payload: AtualizacaoCentroCusto): Promise<void> => {
-    await contaAzulClient.patch(`/v1/financeiro/centros-de-custo/${id}`, payload);
+    await contaAzulClient.patch(`/v1/centro-de-custo/${id}`, payload);
   },
 };
 
@@ -114,7 +114,7 @@ export const contasReceber = {
     params: ParcelaContasReceberPagarQueryParams
   ): Promise<ListaParcelasContasReceberPagar> => {
     const { data } = await contaAzulClient.get<ListaParcelasContasReceberPagar>(
-      '/v1/financeiro/contas-a-receber',
+      '/v1/financeiro/eventos-financeiros/contas-a-receber/buscar',
       { params }
     );
     return data;
@@ -129,7 +129,7 @@ export const contasReceber = {
     payload: CriacaoEventoFinanceiroContasReceber
   ): Promise<EventoFinanceiroCriado> => {
     const { data } = await contaAzulClient.post<EventoFinanceiroCriado>(
-      '/v1/financeiro/contas-a-receber',
+      '/v1/financeiro/eventos-financeiros/contas-a-receber',
       payload
     );
     return data;
@@ -150,7 +150,7 @@ export const contasPagar = {
     params: ParcelaContasReceberPagarQueryParams
   ): Promise<ListaParcelasContasReceberPagar> => {
     const { data } = await contaAzulClient.get<ListaParcelasContasReceberPagar>(
-      '/v1/financeiro/contas-a-pagar',
+      '/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar',
       { params }
     );
     return data;
@@ -165,7 +165,7 @@ export const contasPagar = {
     payload: CriacaoEventoFinanceiroContasPagar
   ): Promise<EventoFinanceiroCriado> => {
     const { data } = await contaAzulClient.post<EventoFinanceiroCriado>(
-      '/v1/financeiro/contas-a-pagar',
+      '/v1/financeiro/eventos-financeiros/contas-a-pagar',
       payload
     );
     return data;
@@ -181,7 +181,7 @@ export const baixas = {
    * Busca baixa por ID
    */
   getById: async (id: string): Promise<Baixa> => {
-    const { data } = await contaAzulClient.get<Baixa>(`/v1/financeiro/baixas/${id}`);
+    const { data } = await contaAzulClient.get<Baixa>(`/v1/financeiro/eventos-financeiros/parcelas/baixa/${id}`);
     return data;
   },
 };
@@ -195,7 +195,7 @@ export const cobrancas = {
    * Busca cobrança por ID
    */
   getById: async (id: string): Promise<Cobranca> => {
-    const { data } = await contaAzulClient.get<Cobranca>(`/v1/financeiro/cobrancas/${id}`);
+    const { data } = await contaAzulClient.get<Cobranca>(`/v1/financeiro/eventos-financeiros/contas-a-receber/cobranca/${id}`);
     return data;
   },
 
@@ -203,7 +203,7 @@ export const cobrancas = {
    * Cancela cobrança por ID
    */
   delete: async (id: string): Promise<void> => {
-    await contaAzulClient.delete(`/v1/financeiro/cobrancas/${id}`);
+    await contaAzulClient.delete(`/v1/financeiro/eventos-financeiros/contas-a-receber/cobranca/${id}`);
   },
 };
 
@@ -217,7 +217,7 @@ export const contasFinanceiras = {
    */
   list: async (params?: ContasFinanceirasQueryParams): Promise<ListaContasFinanceiras> => {
     const { data } = await contaAzulClient.get<ListaContasFinanceiras>(
-      '/v1/financeiro/contas-financeiras',
+      '/v1/conta-financeira',
       { params }
     );
     return data;

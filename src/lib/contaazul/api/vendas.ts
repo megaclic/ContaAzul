@@ -73,7 +73,7 @@ export const vendas = {
    */
   deleteMany: async (ids: string[]): Promise<void> => {
     const payload: DeletarVendasEmLote = { ids };
-    await contaAzulClient.delete('/v1/venda', { data: payload });
+    await contaAzulClient.post('/v1/venda/exclusao-lote', payload);
   },
 };
 
@@ -86,7 +86,7 @@ export const vendedores = {
    * Lista vendedores disponíveis
    */
   list: async (): Promise<Vendedor[]> => {
-    const { data } = await contaAzulClient.get<Vendedor[]>('/v1/vendedores');
+    const { data } = await contaAzulClient.get<Vendedor[]>('/v1/venda/vendedores');
     return data;
   },
 };
@@ -117,7 +117,7 @@ export const pdfVenda = {
    */
   getUrl: async (idVenda: string): Promise<string> => {
     const { data } = await contaAzulClient.get<{ url: string }>(
-      `/v1/venda/${idVenda}/pdf`
+      `/v1/venda/${idVenda}/imprimir`
     );
     return data.url;
   },
