@@ -16,8 +16,11 @@ Este pacote contém **7 arquivos** para corrigir os gaps críticos identificados
 3. `supabase/migrations/002_improve_connection_status.sql` - Status + helpers
 
 ### ✅ **Sync Engine Core (Bloco C)**
-4. `supabase/functions/sync-produtos/index.ts` - Primeiro worker real
-5. `src/hooks/useSyncJobs.ts` - React Hook para gerenciar jobs
+4. `supabase/functions/sync-produtos/index.ts` - Worker de sincronização de produtos
+5. `supabase/functions/sync-pessoas/index.ts` - Worker de sincronização de pessoas
+6. `supabase/functions/sync-vendas/index.ts` - Worker de sincronização de vendas
+7. `supabase/functions/sync-financeiro/index.ts` - Worker de sincronização financeira
+8. `src/hooks/useSyncJobs.ts` - React Hook para gerenciar jobs
 
 ### ✅ **Observabilidade (Bloco D)**
 6. `src/components/contaazul/HealthDashboard.tsx` - Dashboard de saúde
@@ -62,6 +65,15 @@ supabase functions deploy contaazul-auto-refresh
 
 # 3. Sync Produtos
 supabase functions deploy sync-produtos
+
+# 4. Sync Pessoas
+supabase functions deploy sync-pessoas
+
+# 5. Sync Vendas
+supabase functions deploy sync-vendas
+
+# 6. Sync Financeiro
+supabase functions deploy sync-financeiro
 ```
 
 **Verificar:**
