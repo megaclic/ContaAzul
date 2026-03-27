@@ -2,18 +2,17 @@
  * ContaAzul Integration - Financeiro Types
  * 
  * Types completos para o módulo Financeiro da API ContaAzul v2
- * Gerados a partir da OpenAPI 3.0 oficial
+ * Gerados a partir da documentação oficial OpenAPI 3.0
  * 
- * Módulos cobertos:
- * - Categorias Financeiras
- * - Centros de Custo
- * - Contas a Pagar/Receber
- * - Baixas
- * - Cobranças
- * - Contas Financeiras
+ * Observação importante:
+ * alguns recursos da Conta Azul usam nomes diferentes para conceitos
+ * semelhantes a depender do contexto (criação, listagem ou detalhe).
+ * Por isso, alguns tipos abaixo aceitam aliases compatíveis.
  */
 
 import { PaginatedResponse, Versionable } from './core';
+
+export type ContaAzulRevision = string | number;
 
 // ============================================================================
 // ENUMS
@@ -130,7 +129,7 @@ export enum ChargeRequestType {
 }
 
 // ============================================================================
-// COMPOSIÇÃO DE VALOR (usado em múltiplos contextos)
+// COMPOSIÇÃO DE VALOR
 // ============================================================================
 
 export interface ComposicaoValor {
@@ -213,7 +212,7 @@ export interface CentrosCustoQueryParams {
 }
 
 // ============================================================================
-// RATEIO (usado em eventos financeiros)
+// RATEIO
 // ============================================================================
 
 export interface RateioCentroCusto {
@@ -224,7 +223,19 @@ export interface RateioCentroCusto {
 export interface Rateio {
   id_categoria: string;
   valor: number;
+  /**
+   * Em payloads de criação, a documentação tende a usar o singular.
+   */
   rateio_centro_custo?: RateioCentroCusto[];
+}
+
+export interface RateioCategoriaEventoFinanceiro {
+  id_categoria: string;
+  valor: number;
+  /**
+   * Em respostas de leitura/listagem, a API costuma retornar o plural.
+   */
+  rateio_centros_custo?: RateioCentroCusto[];
 }
 
 // ============================================================================
@@ -232,10 +243,12 @@ export interface Rateio {
 // ============================================================================
 
 export interface Parcela {
+  /** ID da conta financeira usada na criação */
   conta_financeira: string;
   data_vencimento: string; // YYYY-MM-DD
   descricao: string;
   detalhe_valor: ComposicaoValor;
+  /** Em payload de criação, o módulo usa metodo_pagamento */
   metodo_pagamento?: InstallmentPaymentMethod;
   nota?: string;
 }
@@ -248,11 +261,10 @@ export interface CondicaoPagamento {
 // EVENTOS FINANCEIROS (Contas a Pagar/Receber)
 // ============================================================================
 
-export interface CriacaoEventoFinanceiroContasReceber {
+export interface CriacaoEventoFinanceiroBase {
   valor: number;
   data_competencia: string; // YYYY-MM-DD
   descricao: string;
-  id_cliente: string;
   conta_financeira: string;
   rateio: Rateio[];
   condicao_pagamento: CondicaoPagamento;
@@ -260,22 +272,18 @@ export interface CriacaoEventoFinanceiroContasReceber {
   referencia_externa?: string;
 }
 
-export interface CriacaoEventoFinanceiroContasPagar {
-  valor: number;
-  data_competencia: string; // YYYY-MM-DD
-  descricao: string;
+export interface CriacaoEventoFinanceiroContasReceber extends CriacaoEventoFinanceiroBase {
+  id_cliente: string;
+}
+
+export interface CriacaoEventoFinanceiroContasPagar extends CriacaoEventoFinanceiroBase {
   id_fornecedor: string;
-  conta_financeira: string;
-  rateio: Rateio[];
-  condicao_pagamento: CondicaoPagamento;
-  observacao?: string;
-  referencia_externa?: string;
 }
 
 export interface EventoFinanceiroCriadoReferencia {
   id: string;
   origem: InstallmentOrigin;
-  revisao: number;
+  revisao: ContaAzulRevision;
 }
 
 export interface EventoFinanceiroCriadoParcelaEvento {
@@ -297,7 +305,8 @@ export interface EventoFinanceiroCriadoParcela extends Versionable {
   descricao: string;
   nota?: string;
   nsu?: string;
-  metodo_pagamento: InstallmentPaymentMethod;
+  metodo_pagamento?: InstallmentPaymentMethod;
+  forma_pagamento?: InstallmentPaymentMethod;
   composicao_valor: ComposicaoValorCompleta;
   valor_liquido: number;
   pago: number;
@@ -311,12 +320,6 @@ export interface EventoFinanceiroCriadoParcela extends Versionable {
 export interface EventoFinanceiroCriadoCondicaoPagamento {
   quantidade_parcelas: number;
   parcelas: EventoFinanceiroCriadoParcela[];
-}
-
-export interface RateioCategoriaEventoFinanceiro {
-  id_categoria: string;
-  valor: number;
-  rateio_centros_custo?: RateioCentroCusto[];
 }
 
 export interface EventoFinanceiroCriado extends Versionable {
@@ -356,10 +359,12 @@ export interface PerdaParcela {
 export interface BaixaParcela extends Versionable {
   id: string;
   data_baixa: string;
-  forma_pagamento: InstallmentPaymentMethod;
+  forma_pagamento?: InstallmentPaymentMethod;
+  metodo_pagamento?: InstallmentPaymentMethod;
   id_cobranca?: string;
   id_conciliacao?: string;
-  id_conta_financeira: string;
+  id_conta_financeira?: string;
+  conta_financeira?: { id: string };
   id_recibo_digital?: string;
   observacao?: string;
   origem: InstallmentOrigin;
@@ -388,7 +393,7 @@ export interface EventoFinanceiroParcela extends Versionable {
   referencia?: {
     id: string;
     origem: InstallmentOrigin;
-    revisao: string;
+    revisao: ContaAzulRevision;
   };
   recorrencia?: RecorrenciaEventoFinanceiro;
 }
@@ -403,8 +408,10 @@ export interface ParcelaContasReceberPagar extends Versionable {
   data_vencimento: string;
   data_prevista_pagamento: string;
   descricao: string;
-  forma_pagamento: InstallmentPaymentMethod;
-  id_conta_financeira: string;
+  forma_pagamento?: InstallmentPaymentMethod;
+  metodo_pagamento?: InstallmentPaymentMethod;
+  id_conta_financeira?: string;
+  conta_financeira?: { id: string };
   nao_pago: number;
   pago: number;
   valor_liquido_total: number;
@@ -464,7 +471,8 @@ export interface Baixa extends Versionable {
   id_referencia: string;
   origem: InstallmentOrigin;
   data_baixa: string;
-  forma_pagamento: InstallmentPaymentMethod;
+  forma_pagamento?: InstallmentPaymentMethod;
+  metodo_pagamento?: InstallmentPaymentMethod;
   nsu?: string;
   observacao?: string;
   atualizado_em: string;

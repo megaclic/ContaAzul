@@ -12,40 +12,32 @@
 
 import contaAzulClient from './client';
 import {
-  // Categorias
   CategoriasFinanceirasResponse,
   CategoriasFinanceirasQueryParams,
   CategoriaFinanceira,
-  // Centros de Custo
   ListagemCentroCusto,
   CentrosCustoQueryParams,
   CriacaoCentroCusto,
   AtualizacaoCentroCusto,
   CentroCusto,
-  // Eventos Financeiros
   CriacaoEventoFinanceiroContasReceber,
   CriacaoEventoFinanceiroContasPagar,
   EventoFinanceiroCriado,
-  // Parcelas
   ListaParcelasContasReceberPagar,
   ParcelaContasReceberPagarQueryParams,
-  // Baixas
   Baixa,
-  // Cobranças
   Cobranca,
-  // Contas Financeiras
   ListaContasFinanceiras,
   ContasFinanceirasQueryParams,
 } from '../types/financeiro';
 
-// ============================================================================
-// CATEGORIAS FINANCEIRAS
-// ============================================================================
+const validarPeriodoObrigatorio = (params: ParcelaContasReceberPagarQueryParams): void => {
+  if (!params?.data_vencimento_de || !params?.data_vencimento_ate) {
+    throw new Error('Os parâmetros data_vencimento_de e data_vencimento_ate são obrigatórios.');
+  }
+};
 
 export const categorias = {
-  /**
-   * Lista categorias financeiras com filtros
-   */
   list: async (params?: CategoriasFinanceirasQueryParams): Promise<CategoriasFinanceirasResponse> => {
     const { data } = await contaAzulClient.get<CategoriasFinanceirasResponse>(
       '/v1/categorias',
@@ -54,25 +46,13 @@ export const categorias = {
     return data;
   },
 
-  /**
-   * Busca categoria financeira por ID
-   */
   getById: async (id: string): Promise<CategoriaFinanceira> => {
-    const { data } = await contaAzulClient.get<CategoriaFinanceira>(
-      `/v1/categorias/${id}`
-    );
+    const { data } = await contaAzulClient.get<CategoriaFinanceira>(`/v1/categorias/${id}`);
     return data;
   },
 };
 
-// ============================================================================
-// CENTROS DE CUSTO
-// ============================================================================
-
 export const centrosCusto = {
-  /**
-   * Lista centros de custo com filtros e totalizadores
-   */
   list: async (params?: CentrosCustoQueryParams): Promise<ListagemCentroCusto> => {
     const { data } = await contaAzulClient.get<ListagemCentroCusto>(
       '/v1/centro-de-custo',
@@ -81,38 +61,21 @@ export const centrosCusto = {
     return data;
   },
 
-  /**
-   * Cria novo centro de custo
-   */
   create: async (payload: CriacaoCentroCusto): Promise<CentroCusto> => {
-    const { data } = await contaAzulClient.post<CentroCusto>(
-      '/v1/centro-de-custo',
-      payload
-    );
+    const { data } = await contaAzulClient.post<CentroCusto>('/v1/centro-de-custo', payload);
     return data;
   },
 
-  /**
-   * Atualiza centro de custo por ID
-   */
   update: async (id: string, payload: AtualizacaoCentroCusto): Promise<void> => {
     await contaAzulClient.patch(`/v1/centro-de-custo/${id}`, payload);
   },
 };
 
-// ============================================================================
-// CONTAS A RECEBER (Receitas)
-// ============================================================================
-
 export const contasReceber = {
-  /**
-   * Lista parcelas de contas a receber por período
-   * 
-   * @param params - Obrigatório: data_vencimento_de e data_vencimento_ate
-   */
   list: async (
     params: ParcelaContasReceberPagarQueryParams
   ): Promise<ListaParcelasContasReceberPagar> => {
+    validarPeriodoObrigatorio(params);
     const { data } = await contaAzulClient.get<ListaParcelasContasReceberPagar>(
       '/v1/financeiro/eventos-financeiros/contas-a-receber/buscar',
       { params }
@@ -120,11 +83,6 @@ export const contasReceber = {
     return data;
   },
 
-  /**
-   * Cria novo evento financeiro de receita (contas a receber)
-   * 
-   * @returns Evento criado com parcelas geradas
-   */
   create: async (
     payload: CriacaoEventoFinanceiroContasReceber
   ): Promise<EventoFinanceiroCriado> => {
@@ -136,19 +94,11 @@ export const contasReceber = {
   },
 };
 
-// ============================================================================
-// CONTAS A PAGAR (Despesas)
-// ============================================================================
-
 export const contasPagar = {
-  /**
-   * Lista parcelas de contas a pagar por período
-   * 
-   * @param params - Obrigatório: data_vencimento_de e data_vencimento_ate
-   */
   list: async (
     params: ParcelaContasReceberPagarQueryParams
   ): Promise<ListaParcelasContasReceberPagar> => {
+    validarPeriodoObrigatorio(params);
     const { data } = await contaAzulClient.get<ListaParcelasContasReceberPagar>(
       '/v1/financeiro/eventos-financeiros/contas-a-pagar/buscar',
       { params }
@@ -156,11 +106,6 @@ export const contasPagar = {
     return data;
   },
 
-  /**
-   * Cria novo evento financeiro de despesa (contas a pagar)
-   * 
-   * @returns Evento criado com parcelas geradas
-   */
   create: async (
     payload: CriacaoEventoFinanceiroContasPagar
   ): Promise<EventoFinanceiroCriado> => {
@@ -172,61 +117,38 @@ export const contasPagar = {
   },
 };
 
-// ============================================================================
-// BAIXAS
-// ============================================================================
-
 export const baixas = {
-  /**
-   * Busca baixa por ID
-   */
   getById: async (id: string): Promise<Baixa> => {
-    const { data } = await contaAzulClient.get<Baixa>(`/v1/financeiro/eventos-financeiros/parcelas/baixa/${id}`);
-    return data;
-  },
-};
-
-// ============================================================================
-// COBRANÇAS
-// ============================================================================
-
-export const cobrancas = {
-  /**
-   * Busca cobrança por ID
-   */
-  getById: async (id: string): Promise<Cobranca> => {
-    const { data } = await contaAzulClient.get<Cobranca>(`/v1/financeiro/eventos-financeiros/contas-a-receber/cobranca/${id}`);
-    return data;
-  },
-
-  /**
-   * Cancela cobrança por ID
-   */
-  delete: async (id: string): Promise<void> => {
-    await contaAzulClient.delete(`/v1/financeiro/eventos-financeiros/contas-a-receber/cobranca/${id}`);
-  },
-};
-
-// ============================================================================
-// CONTAS FINANCEIRAS
-// ============================================================================
-
-export const contasFinanceiras = {
-  /**
-   * Lista contas financeiras (bancos, cartões, etc)
-   */
-  list: async (params?: ContasFinanceirasQueryParams): Promise<ListaContasFinanceiras> => {
-    const { data } = await contaAzulClient.get<ListaContasFinanceiras>(
-      '/v1/conta-financeira',
-      { params }
+    const { data } = await contaAzulClient.get<Baixa>(
+      `/v1/financeiro/eventos-financeiros/parcelas/baixa/${id}`
     );
     return data;
   },
 };
 
-// ============================================================================
-// EXPORT DEFAULT
-// ============================================================================
+export const cobrancas = {
+  getById: async (id: string): Promise<Cobranca> => {
+    const { data } = await contaAzulClient.get<Cobranca>(
+      `/v1/financeiro/eventos-financeiros/contas-a-receber/cobranca/${id}`
+    );
+    return data;
+  },
+
+  delete: async (id: string): Promise<void> => {
+    await contaAzulClient.delete(
+      `/v1/financeiro/eventos-financeiros/contas-a-receber/cobranca/${id}`
+    );
+  },
+};
+
+export const contasFinanceiras = {
+  list: async (params?: ContasFinanceirasQueryParams): Promise<ListaContasFinanceiras> => {
+    const { data } = await contaAzulClient.get<ListaContasFinanceiras>('/v1/conta-financeira', {
+      params,
+    });
+    return data;
+  },
+};
 
 const financeiro = {
   categorias,

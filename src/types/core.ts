@@ -62,10 +62,19 @@ export interface DateRangeParams {
 // Paginated Response Wrapper
 // ============================================================================
 
+/**
+ * A API da Conta Azul não é 100% consistente entre módulos na estrutura de
+ * paginação. Este tipo aceita as variantes mais comuns sem perder tipagem útil.
+ */
 export interface PaginatedResponse<T> {
-  items: T[];
-  total_items: number;
-  itens_totais?: number; // algumas APIs usam esse nome
+  items?: T[];
+  data?: T[];
+  resultados?: T[];
+  total_items?: number;
+  itens_totais?: number;
+  total?: number;
+  pagina?: number;
+  tamanho_pagina?: number;
 }
 
 // ============================================================================
